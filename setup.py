@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='aState',
-    version='0.2',
+    version='0.3',
     author='James Reed',
     author_email='jdreed1954@hotmail.com',
     description='aState create and modifies A records in public host zones.',
