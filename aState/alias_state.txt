@@ -1,4 +1,0 @@
-arec_name, dns_name
-ftp.cendatsci.com., barfoo.cendatsci.com.
-mail.cendatsci.com., cendatsci.com.
-cendatsci.com., s3-website-us-west-2.amazonaws.com.

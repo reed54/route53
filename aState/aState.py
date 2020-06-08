@@ -145,27 +145,31 @@ def fix_lb(lb_dns_name, certArn):
     lb_client = boto3.client('elb')
 
     lbs = lb_client.describe_load_balancers()
-    lbs = lbs['LoadBalancers']
+    print(f'lbs: {lbs}')
+    lbs = lbs['LoadBalancerDescriptions']
 
     # Find lb that matches lb_dns_name
     rlb = []
+    no_dualstack_lb_name = lb_dns_name[10:-1]
 
     for lb in lbs:
-        if (lb['DNSName'] == lb_dns_name):
+        if (lb['DNSName'] == no_dualstack_lb_name):
             rlb = lb
             break
 
     if (len(rlb) == 0):
-        print("LB with DNSName {} not found.".format(lb_dns_name))
+        print("LB with DNSName {} not found.".format(no_dualstack_lb_name))
+        return
 
-    listeners = lb_client.describe_listeners(
-        LoadBalancerArn=rlb['LoadBalancerArn'])
+#    listeners = lb_client.describe_listeners(
+#        LoadBalancerArn=rlb['LoadBalancerArn'])
 
     # Get listener ARNs
-    listeners = listeners['Listeners']
+    listeners = rlb['ListenerDescriptions']
     l_arns = []
 
     for l in listeners:
+        print(f'l: {l}')
         arn = l['ListenerArn']
         port = l['Port']
         if (port == 443):
@@ -247,7 +251,7 @@ def process_alias_changes(service_name, lb_dns_name, filename):
                 print("\n\nState RECORD: ", i, "Create new A record.",
                       newState[i])
                 resp = create_a_record(
-                    hosting_zone_id, cArecs[0], full_dns_name, nAname, lb_dns_name, nCertId)
+                    hosting_zone_id, cArecs[0], full_dns_name, nAname, lb_dns_name, nCertArn)
                 print("Response: ", resp)
 
             else:
@@ -265,7 +269,7 @@ def process_alias_changes(service_name, lb_dns_name, filename):
                         full_dns_name,
                         nAname,
                         lb_dns_name,
-                        nCertId)
+                        nCertArn)
 
                     print("Response: ", resp)
                     #
