@@ -42,9 +42,9 @@ class DomainManager:
     def list_public_hosted_zones(self):
         """ Format list of Public Hosted Zones"""
         zones = self.get_public_hosted_zones()
-        print("\n\n ***************** Public Hosted Zones ************************\n")
+        #print("\n\n ***************** Public Hosted Zones ************************\n")
         for zone in zones:
-            print("Zone: ", zone, "\n")
+            print(zone, "\n")
         return
 
     def get_a_records(self, zone):
@@ -59,8 +59,8 @@ class DomainManager:
         # Filter this Nested Dictionary and Pull out all the A records
         rrsSets = response['ResourceRecordSets']
         for rrs in rrsSets:
-            # print(rrs['Type'])
-            if (rrs['Type'] == 'A'):
+            print(rrs)
+            if (rrs['Type'] == 'A' and 'AliasTarget' in rrs):
                 recO = rrs['AliasTarget']
 
                 rec = [{'Name':                  rrs['Name'],

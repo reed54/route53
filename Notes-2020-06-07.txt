@@ -1,0 +1,26 @@
+From @Mac on Sunday, June 7 @ 11:00 am via Slack
+
+Some notes:
+1. The reference file was static and should have contained just the DNS 
+   prefix value and the service name.  I've also added the 
+   certificate ID for the next part.
+
+2. I needed to pass the current LB dns name (which could have changed) 
+   and the service name.
+
+3. aState reads static file, get's DNS prefix from it.
+
+4. Finds match in file to command line param and compares LB dns name 
+   param to current value in R53.  If different, updates.
+
+Now, for the new part, only if we update, we also need to:
+
+Fix the load balancer in two ways:
+
+1. Add SSL Certificate to Listener entry (on port 443).  
+   Certificate ID is in static file.
+
+2. Update listener protocol from TCP to HTTPS.
+
+If you want a crack at that, go for it, otherwise I'll do it tonight.  
+I tweaked my back, so I need to go lay down for a bit.

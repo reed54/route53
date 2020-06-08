@@ -29,24 +29,28 @@ import aState.util
 
 session = None
 domain_manager = None
-verbose = False
-dryrun = False
+_verbose = False
+_dryrun = False
 
 
 @click.group()
 @click.option('--profile', default=None,
               help="Use a given AWS profile.")
-@click.option('--verbose', default=False,
+@click.option('--verbose', is_flag=True, default=False,
               help="Set verbose mode.")
-@click.option('--dryrun', default=False,
+@click.option('--dryrun', is_flag=True, default=False,
               help="Dryrun disables making any changes to A records.")
 def cli(profile, verbose, dryrun):
     """aState Uses Route53 to modify/create A Records for public hosted zones."""
 
-    global session, domain_manager
-    if (verbose):
-        print("CLI, verbose: ", verbose)
-        print("CLI, dryrun: ", dryrun)
+    global session, domain_manager, _verbose, _dryrun
+    if verbose:
+        _verbose = True
+    if dryrun:
+        _dryrun = True
+    if (_verbose):
+        print("CLI, verbose: ", _verbose)
+        print("CLI, dryrun: ", _dryrun)
 
     session_cfg = {}
     if profile:
@@ -86,7 +90,7 @@ def get_a_records():
 def list_a_records():
     """List all A records for all public hosted zones."""
 
-    if (verbose):
+    if (_verbose):
         print("\t\tlist-a-records")
     arecs = get_a_records()
     for ar in arecs:
@@ -106,22 +110,23 @@ def read_alias_state_file(fn):
         line_count = 0
         for row in csv_reader:
             if line_count == 0:
-                if (verbose):
+                if (_verbose):
                     print(f'Column names are {", ".join(row)}')
 
             else:
-                (arec_name, dns_name) = (row[0].strip(), row[1].strip())
+                (arec_name, dns_name, cert_id) = (
+                    row[0].strip(), row[1].strip(), row[2].strip())
                 if (dns_name.find('none') > 0):
                     skipped += 1
-                    if(verbose):
+                    if(_verbose):
                         print("SKIPPED - record number, dns-name: ",
                               line_count, dns_name)
                 else:
-                    state.append((arec_name, dns_name))
+                    state.append((arec_name, dns_name, cert_id))
 
             line_count += 1
 
-    if (verbose):
+    if (_verbose):
         print("read_alias_state_file,   records read: ", line_count)
         print("                      records skipped: ", skipped)
         print("            records in returned state: ", len(state))
@@ -130,8 +135,10 @@ def read_alias_state_file(fn):
 
 
 @cli.command('process-alias-changes')
-@click.argument('filename', default='./alias_state.txt')
-def process_alias_changes(filename):
+@click.argument('service_name')
+@click.argument('lb_dns_name')
+@click.argument('filename', default='./alias_state.txt', type=click.Path(exists=True))
+def process_alias_changes(service_name, lb_dns_name, filename):
     """Change A records in public hosted zones according to input file."""
     def get_current_index(nA, cArecs):
         idx = -1
@@ -145,11 +152,16 @@ def process_alias_changes(filename):
 
         return(idx)
 
-    if (verbose):
+    if (_verbose):
         print("***** process-alias-changes *****")
         print("Alias FN: ", filename)
 
     newState = read_alias_state_file(filename)
+    public_zone = domain_manager.get_public_hosted_zones()[0]
+    dns_suffix = public_zone['Name']
+    lb_dns_name = f'{lb_dns_name}.'
+    hosting_zone_id = public_zone['Id'].split('/')[2]
+    print(f'Hosting Zone id: {hosting_zone_id}')
 
     """
     Now get the A records to compare with the new state
@@ -167,7 +179,7 @@ def process_alias_changes(filename):
     cDnsName = [rec[0]['DNSName'] for rec in cArecs]
     cHzone = [rec[0]['HostedZoneId'] for rec in cArecs]
 
-    if (verbose):
+    if (_verbose):
         print("PROCESS_ALIAS_CHANGES :\n")
         print("\t\t   cArecs :\n", cArecs, "\n")
         print("\t\t   cAname :\n", cAname, "\n")
@@ -176,31 +188,35 @@ def process_alias_changes(filename):
 
     numNewState = len(newState)
     for i in range(numNewState):  # cycle over newState records
-        nAname, nDnsName = newState[i]
-        idx = get_current_index(nAname, cArecs)
-        if (idx < 0):
-            # Create New A Record
-            print("\n\nState RECORD: ", i, "Create new A record.",
-                  newState[i])
-            resp = create_a_record(cArecs[0], nDnsName, nAname)
-            print("Response: ", resp)
-
-        else:
-            if (nDnsName == cDnsName[idx]):
-                # No change A record remains unchanged.
-                print("\n\nState RECORD: ", i, "No change.",
+        nAname, nDnsName, nCertId = newState[i]
+        full_dns_name = f'{nDnsName}.{dns_suffix}'
+        if service_name == nAname:
+            idx = get_current_index(full_dns_name, cArecs)
+            if (idx < 0):
+                # Create New A Record
+                print("\n\nState RECORD: ", i, "Create new A record.",
                       newState[i])
-            else:
-                # Update existing A Record
-                print("\n\nnewState RECORD: ", i, "Update existing A record.",
-                      newState[i])
-                resp = create_a_record(cArecs[idx], nDnsName, nAname)
+                resp = create_a_record(
+                    hosting_zone_id, cArecs[0], full_dns_name, nAname, lb_dns_name, nCertId)
                 print("Response: ", resp)
+
+            else:
+                if (lb_dns_name == cDnsName[idx]):
+                    # No change A record remains unchanged.
+                    print("\n\nState RECORD: ", i, "No change.",
+                          newState[i])
+                else:
+                    # Update existing A Record
+                    print("\n\nnewState RECORD: ", i, "Update existing A record.",
+                          newState[i])
+                    resp = create_a_record(
+                        hosting_zone_id, cArecs[idx], full_dns_name, nAname, lb_dns_name, nCertId)
+                    print("Response: ", resp)
 
     return
 
 
-def create_a_record(arec0, domain_name, domain):
+def create_a_record(hosting_zone_id, arec0, domain_name, domain, lb_dns_name, nCertId):
     """Create new or modified A record."""
 
     arec = arec0[0]
@@ -212,26 +228,27 @@ def create_a_record(arec0, domain_name, domain):
         'Changes': [{
             'Action': 'UPSERT',
             'ResourceRecordSet': {
-                    'Name': domain_name,
+                    'Name': f'{domain_name}',
                     'Type': 'A',
                     'AliasTarget': {
                         'HostedZoneId': hostedZoneId,
-                        'DNSName': domain,
+                        'DNSName': lb_dns_name,
                         'EvaluateTargetHealth': False
                     }
                     }
         }]
     }
-    #print("\t************** create_a_record **************\n")
-    # print("\t\t Domain Name: ", domain_name)
-    # print("\t\t      Domain: ", domain)
-    # print("\t\t  HostZoneId: ", hostedZoneId)
-    # print("\t\tChange Batch: ", changeBatch)
+    print("\t************** create_a_record **************\n")
+    print("\t\t Domain Name: ", domain_name)
+    print("\t\t      Domain: ", domain)
+    print("\t\t  HostZoneId: ", hostedZoneId)
+    print("\t\tChange Batch: ", changeBatch)
 
-    response = domain_manager.client.change_resource_record_sets(
-        HostedZoneId=hostedZoneId, ChangeBatch=changeBatch)
-
-    return response
+    if _dryrun == False:
+        response = domain_manager.client.change_resource_record_sets(
+            HostedZoneId=hosting_zone_id, ChangeBatch=changeBatch)
+        return response
+    return 0
 
 
 def create_cf_doamin_record(self, zone, domain_name, cf_domain):
