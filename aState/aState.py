@@ -134,10 +134,60 @@ def read_alias_state_file(fn):
     return state
 
 
+def fix_lb(lb_dns_name, certArn):
+    """
+     1. Add SSL Certificate to Listener entry (on port 443).  
+       Certificate ARN is in CSV.
+
+     2. Update listener protocol from TCP to HTTPS.
+    """
+    #lb_client = boto3.client('elbv2')
+    lb_client = boto3.client('elb')
+
+    lbs = lb_client.describe_load_balancers()
+    lbs = lbs['LoadBalancers']
+
+    # Find lb that matches lb_dns_name
+    rlb = []
+
+    for lb in lbs:
+        if (lb['DNSName'] == lb_dns_name):
+            rlb = lb
+            break
+
+    if (len(rlb) == 0):
+        print("LB with DNSName {} not found.".format(lb_dns_name))
+
+    listeners = lb_client.describe_listeners(
+        LoadBalancerArn=rlb['LoadBalancerArn'])
+
+    # Get listener ARNs
+    listeners = listeners['Listeners']
+    l_arns = []
+
+    for l in listeners:
+        arn = l['ListenerArn']
+        port = l['Port']
+        if (port == 443):
+            # Add SSL certificate to this arn
+            res_cert = lb_client.modify_listener(
+                ListenerArn=arn,
+                Certificates=[
+                    {
+                        'CertificateArn': certArn,  # This comes from the csv
+                        'IsDefault': True
+                    }
+                ]
+            )
+            print("update listener with certArn: ", res_cert)
+
+    return
+
+
 @cli.command('process-alias-changes')
 @click.argument('service_name')
 @click.argument('lb_dns_name')
-@click.argument('filename', default='./alias_state.txt', type=click.Path(exists=True))
+@click.argument('filename', default='./svc_lb_mapping.csv', type=click.Path(exists=True))
 def process_alias_changes(service_name, lb_dns_name, filename):
     """Change A records in public hosted zones according to input file."""
     def get_current_index(nA, cArecs):
@@ -188,7 +238,7 @@ def process_alias_changes(service_name, lb_dns_name, filename):
 
     numNewState = len(newState)
     for i in range(numNewState):  # cycle over newState records
-        nAname, nDnsName, nCertId = newState[i]
+        nAname, nDnsName, nCertArn = newState[i]
         full_dns_name = f'{nDnsName}.{dns_suffix}'
         if service_name == nAname:
             idx = get_current_index(full_dns_name, cArecs)
@@ -210,9 +260,23 @@ def process_alias_changes(service_name, lb_dns_name, filename):
                     print("\n\nnewState RECORD: ", i, "Update existing A record.",
                           newState[i])
                     resp = create_a_record(
-                        hosting_zone_id, cArecs[idx], full_dns_name, nAname, lb_dns_name, nCertId)
-                    print("Response: ", resp)
+                        hosting_zone_id,
+                        cArecs[idx],
+                        full_dns_name,
+                        nAname,
+                        lb_dns_name,
+                        nCertId)
 
+                    print("Response: ", resp)
+                    #
+                    # Fix load_balancer
+                    # Add SSL Certificate to listener entr (port 443)
+                    #       Certificate in static file
+                    #
+                    # Update listener from TCP to HTTPS
+                    # certificate ID (nCertID)
+                    # LB is lb_dns_name
+                    lb_resp = fix_lb(lb_dns_name, nCertArn)
     return
 
 
