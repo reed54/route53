@@ -3,21 +3,15 @@
 
 """aState: Modify/Add "A" record to PUBLIC Hosted zone
 
-    Input comes from text file.  The format of this file is:
-arec_name, dns_name
-
+    Input comes from CSV file.  The format of this file is:
+        Format: svc_name, dns_name, CertificateArn
+    
 Where:
 
-arec_name is the name of the A record, and
-dns_name is the full path to the DNS in this A record
-- Input value <arg1>
-- Input avlue <arg2>
+        svc_name: 
+        dns_name: 
+        CertificateArn:
 
-High-level logic:
-    If <arec_name> record does not exist, create with type=A, dns_name is <dns_name>
-
-    ELSE if <arec_name> record existing value AND <dns_name> <> dns in A record, then update <arec_name>
-        record value with <dns_name>
 """
 
 import boto3
@@ -145,7 +139,7 @@ def fix_lb(lb_dns_name, certArn):
     lb_client = boto3.client('elb')
 
     lbs = lb_client.describe_load_balancers()
-    print(f'lbs: {lbs}')
+    #print(f'lbs: {lbs}')
     lbs = lbs['LoadBalancerDescriptions']
 
     # Find lb that matches lb_dns_name
@@ -153,6 +147,7 @@ def fix_lb(lb_dns_name, certArn):
     no_dualstack_lb_name = lb_dns_name[10:-1]
 
     for lb in lbs:
+        print(f'{lb["DNSName"]} == {no_dualstack_lb_name}')
         if (lb['DNSName'] == no_dualstack_lb_name):
             rlb = lb
             break
@@ -161,29 +156,39 @@ def fix_lb(lb_dns_name, certArn):
         print("LB with DNSName {} not found.".format(no_dualstack_lb_name))
         return
 
-#    listeners = lb_client.describe_listeners(
-#        LoadBalancerArn=rlb['LoadBalancerArn'])
-
     # Get listener ARNs
+    print(f'RLB: {rlb}')
+
     listeners = rlb['ListenerDescriptions']
     l_arns = []
 
     for l in listeners:
         print(f'l: {l}')
-        arn = l['ListenerArn']
-        port = l['Port']
-        if (port == 443):
+        #arn = l['ListenerArn']
+        listener = l['Listener']
+        proto = listener['Protocol']
+        instPort = listener['InstancePort']
+        port = listener['LoadBalancerPort']
+        name = rlb['LoadBalancerName']
+        if (port == 443 and proto != "HTTPS"):
             # Add SSL certificate to this arn
-            res_cert = lb_client.modify_listener(
-                ListenerArn=arn,
-                Certificates=[
-                    {
-                        'CertificateArn': certArn,  # This comes from the csv
-                        'IsDefault': True
-                    }
-                ]
-            )
-            print("update listener with certArn: ", res_cert)
+            res = lb_client.delete_load_balancer_listeners(
+                    LoadBalancerName=name,
+                    LoadBalancerPorts=[port])
+            print(f'Delete response: {res}')
+            res = lb_client.create_load_balancer_listeners(
+                    LoadBalancerName=name,
+                    Listeners=[
+                        {
+                            'Protocol': 'HTTPS',
+                            'LoadBalancerPort': 443,
+                            'InstancePort': instPort,
+                            'InstanceProtocol': 'HTTP',
+                            'SSLCertificateId': certArn
+                        }])
+            print(f'Create resp: {res}')
+        else:
+            print('No load balancer listeners to update!')
 
     return
 
