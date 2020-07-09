@@ -1,16 +1,23 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""aState: Modify/Add "A" record to PUBLIC Hosted zone
+"""
+    aState: Modify/Add "A" record to PUBLIC Hosted zone
+   
+        James Reed 
+        Centennial Data Science
 
-    Input comes from CSV file.  The format of this file is:
+        email: jdreed1954@hotmail.com
+        cell: 303-570-4927
+        
+        Input comes from CSV file.  The format of this file is:
         Format: svc_name, dns_name, CertificateArn
     
-Where:
+    Where:
 
-        svc_name: 
-        dns_name: 
-        CertificateArn:
+        svc_name:   service name 
+        dns_name:  DNS name of hosted zone.
+        CertificateArn:  AWS resource name of SSL certificate.
 
 """
 

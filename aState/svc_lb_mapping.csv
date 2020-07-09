@@ -1,9 +1,2 @@
 svc_name, dns_name, CertificateArn
-array20, live, 37b661b6-485a-4d8a-9f2e-710820c15c3e
-array20-control, control, 37b661b6-485a-4d8a-9f2e-710820c15c3e
-array20-websocket, legacy-socket, 37b661b6-485a-4d8a-9f2e-710820c15c3e
-bin-chicken, report, 37b661b6-485a-4d8a-9f2e-710820c15c3e
-client-api, admin-api, 37b661b6-485a-4d8a-9f2e-710820c15c3e
-sea-flap-flap, admin, 37b661b6-485a-4d8a-9f2e-710820c15c3e
-sea-unicorn, socket, 37b661b6-485a-4d8a-9f2e-710820c15c3e
-velocirabbit, leaderboard, 37b661b6-485a-4d8a-9f2e-710820c15c3e
+service-name, dns-name, ssl-certificate-arn

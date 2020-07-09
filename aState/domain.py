@@ -1,7 +1,14 @@
 # -*- coding: utf-8 -*-
 import uuid
 
-"""Classes for Route 53 domains."""
+"""
+        Classes for Route 53 domains.
+
+        James Reed jdreed1954@hotmail.com
+        Cell: 303-570-4927
+        Centennial Data Science
+"""
+
 
 
 class DomainManager:
